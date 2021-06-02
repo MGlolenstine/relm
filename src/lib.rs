@@ -43,7 +43,7 @@
     trivial_numeric_casts,
     unused_extern_crates,
     unused_import_braces,
-    unused_qualifications,
+    unused_qualifications
 )]
 
 /*
@@ -104,35 +104,21 @@ pub mod vendor;
 mod widget;
 
 #[doc(hidden)]
-pub use glib::{
-    Cast,
-    IsA,
-    Object,
-    StaticType,
-    ToValue,
-    Value,
-};
-#[doc(hidden)]
 pub use glib::translate::{FromGlibPtrNone, ToGlib, ToGlibPtr};
-#[doc(hidden)]
-pub use gobject_sys::{GParameter, g_object_newv};
 use glib::Continue;
+#[doc(hidden)]
+pub use glib::{Cast, IsA, Object, StaticType, ToValue, Value};
+#[doc(hidden)]
+pub use gobject_sys::{g_object_newv, GParameter};
 
 pub use crate::core::{Channel, EventStream, Sender};
-pub use crate::state::{
-    DisplayVariant,
-    IntoOption,
-    IntoPair,
-    Relm,
-    Update,
-    UpdateNew,
-    execute,
-};
+pub use crate::state::{execute, DisplayVariant, IntoOption, IntoPair, Relm, Update, UpdateNew};
 use state::init_component;
 
 pub use component::Component;
 pub use container::{Container, ContainerComponent, ContainerWidget};
 pub use drawing::DrawHandler;
+use gtk4 as gtk;
 pub use widget::{Widget, WidgetTest};
 
 /// Dummy macro to be used with `#[derive(Widget)]`.
@@ -151,9 +137,12 @@ macro_rules! use_impl_self_type {
     };
 }
 
-fn create_widget_test<WIDGET>(model_param: WIDGET::ModelParam) -> (Component<WIDGET>, WIDGET::Widgets)
-    where WIDGET: Widget + WidgetTest + 'static,
-          WIDGET::Msg: DisplayVariant + 'static,
+fn create_widget_test<WIDGET>(
+    model_param: WIDGET::ModelParam,
+) -> (Component<WIDGET>, WIDGET::Widgets)
+where
+    WIDGET: Widget + WidgetTest + 'static,
+    WIDGET::Msg: DisplayVariant + 'static,
 {
     let (component, widget, relm): (_, WIDGET, _) = create_widget(model_param);
     let widgets = widget.get_widgets();
@@ -163,10 +152,10 @@ fn create_widget_test<WIDGET>(model_param: WIDGET::ModelParam) -> (Component<WID
 
 /// Create a new relm widget without adding it to an existing widget.
 /// This is useful when a relm widget is at the root of another relm widget.
-pub fn create_component<CHILDWIDGET>(model_param: CHILDWIDGET::ModelParam)
-        -> Component<CHILDWIDGET>
-    where CHILDWIDGET: Widget + 'static,
-          CHILDWIDGET::Msg: DisplayVariant + 'static,
+pub fn create_component<CHILDWIDGET>(model_param: CHILDWIDGET::ModelParam) -> Component<CHILDWIDGET>
+where
+    CHILDWIDGET: Widget + 'static,
+    CHILDWIDGET::Msg: DisplayVariant + 'static,
 {
     let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
     init_component::<CHILDWIDGET>(component.stream(), widget, &child_relm);
@@ -175,10 +164,12 @@ pub fn create_component<CHILDWIDGET>(model_param: CHILDWIDGET::ModelParam)
 
 /// Create a new relm container widget without adding it to an existing widget.
 /// This is useful when a relm widget is at the root of another relm widget.
-pub fn create_container<CHILDWIDGET>(model_param: CHILDWIDGET::ModelParam)
-        -> ContainerComponent<CHILDWIDGET>
-    where CHILDWIDGET: Container + Widget + 'static,
-          CHILDWIDGET::Msg: DisplayVariant + 'static,
+pub fn create_container<CHILDWIDGET>(
+    model_param: CHILDWIDGET::ModelParam,
+) -> ContainerComponent<CHILDWIDGET>
+where
+    CHILDWIDGET: Container + Widget + 'static,
+    CHILDWIDGET::Msg: DisplayVariant + 'static,
 {
     let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
     let container = widget.container().clone();
@@ -188,10 +179,12 @@ pub fn create_container<CHILDWIDGET>(model_param: CHILDWIDGET::ModelParam)
 }
 
 /// Create a new relm widget with `model_param` as initialization value.
-fn create_widget<WIDGET>(model_param: WIDGET::ModelParam)
-    -> (Component<WIDGET>, WIDGET, Relm<WIDGET>)
-    where WIDGET: Widget + 'static,
-          WIDGET::Msg: DisplayVariant + 'static,
+fn create_widget<WIDGET>(
+    model_param: WIDGET::ModelParam,
+) -> (Component<WIDGET>, WIDGET, Relm<WIDGET>)
+where
+    WIDGET: Widget + 'static,
+    WIDGET::Msg: DisplayVariant + 'static,
 {
     let stream = EventStream::new();
 
@@ -261,10 +254,12 @@ fn create_widget<WIDGET>(model_param: WIDGET::ModelParam)
 /// let (component, widgets) = relm::init_test::<Win>(()).expect("init_test failed");
 /// # }
 /// ```
-pub fn init_test<WIDGET>(model_param: WIDGET::ModelParam) ->
-    Result<(Component<WIDGET>, WIDGET::Widgets), ()>
-    where WIDGET: Widget + WidgetTest + 'static,
-          WIDGET::Msg: DisplayVariant + 'static,
+pub fn init_test<WIDGET>(
+    model_param: WIDGET::ModelParam,
+) -> Result<(Component<WIDGET>, WIDGET::Widgets), ()>
+where
+    WIDGET: Widget + WidgetTest + 'static,
+    WIDGET::Msg: DisplayVariant + 'static,
 {
     gtk::init().map_err(|_| ())?;
     let component = create_widget_test::<WIDGET>(model_param);
@@ -273,8 +268,9 @@ pub fn init_test<WIDGET>(model_param: WIDGET::ModelParam) ->
 
 /// Initialize a widget.
 pub fn init<WIDGET>(model_param: WIDGET::ModelParam) -> Result<Component<WIDGET>, ()>
-    where WIDGET: Widget + 'static,
-          WIDGET::Msg: DisplayVariant + 'static
+where
+    WIDGET: Widget + 'static,
+    WIDGET::Msg: DisplayVariant + 'static,
 {
     let (component, widget, relm) = create_widget::<WIDGET>(model_param);
     init_component::<WIDGET>(component.stream(), widget, &relm);
@@ -331,7 +327,8 @@ pub fn init<WIDGET>(model_param: WIDGET::ModelParam) -> Result<Component<WIDGET>
 /// # }
 /// ```
 pub fn run<WIDGET>(model_param: WIDGET::ModelParam) -> Result<(), ()>
-    where WIDGET: Widget + 'static,
+where
+    WIDGET: Widget + 'static,
 {
     gtk::init().map_err(|_| ())?;
     let _component = init::<WIDGET>(model_param)?;
@@ -340,9 +337,13 @@ pub fn run<WIDGET>(model_param: WIDGET::ModelParam) -> Result<(), ()>
 }
 
 /// Emit the `msg` every `duration` ms.
-pub fn interval<F: Fn() -> MSG + 'static, MSG: 'static>(stream: &EventStream<MSG>, duration: u32, constructor: F) {
+pub fn interval<F: Fn() -> MSG + 'static, MSG: 'static>(
+    stream: &EventStream<MSG>,
+    duration: u32,
+    constructor: F,
+) {
     let stream = stream.clone();
-    gtk::timeout_add(duration, move || {
+    glib::timeout_add(duration, move || {
         let msg = constructor();
         stream.emit(msg);
         Continue(true)
@@ -350,9 +351,13 @@ pub fn interval<F: Fn() -> MSG + 'static, MSG: 'static>(stream: &EventStream<MSG
 }
 
 /// After `duration` ms, emit `msg`.
-pub fn timeout<F: Fn() -> MSG + 'static, MSG: 'static>(stream: &EventStream<MSG>, duration: u32, constructor: F) {
+pub fn timeout<F: Fn() -> MSG + 'static, MSG: 'static>(
+    stream: &EventStream<MSG>,
+    duration: u32,
+    constructor: F,
+) {
     let stream = stream.clone();
-    gtk::timeout_add(duration, move || {
+    glib::timeout_add(duration, move || {
         let msg = constructor();
         stream.emit(msg);
         Continue(false)

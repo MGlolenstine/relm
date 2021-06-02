@@ -20,15 +20,15 @@
  */
 
 use glib::{IsA, Object};
-use gtk;
 
-use super::{Relm, run};
+use super::{run, Relm};
 use crate::state::Update;
 
 /// Trait to implement to manage widget's events.
 pub trait Widget
-    where Self: Update,
-          Self::Root: Clone + IsA<Object> + IsA<gtk::Widget>,
+where
+    Self: Update,
+    Self::Root: Clone + IsA<Object> + IsA<gtk4::Widget>,
 {
     /// The type of the root widget.
     type Root;
@@ -36,12 +36,10 @@ pub trait Widget
     /// Update the view after it is initially created.
     /// This method is only useful when using the `#[widget]` attribute, because when not using it,
     /// you can use the [`view()`](trait.Widget.html#tymethod.view) method instead.
-    fn init_view(&mut self) {
-    }
+    fn init_view(&mut self) {}
 
     /// Method called when the widget is added to its parent.
-    fn on_add<W: IsA<gtk::Widget> + IsA<Object>>(&self, _parent: W) {
-    }
+    fn on_add<W: IsA<gtk4::Widget> + IsA<Object>>(&self, _parent: W) {}
 
     /// Get the parent ID.
     /// This is useful for custom Container implementation: when you implement the
@@ -59,7 +57,8 @@ pub trait Widget
 
     /// Create the window from this widget and start the main loop.
     fn run(model_param: Self::ModelParam) -> Result<(), ()>
-        where Self: 'static,
+    where
+        Self: 'static,
     {
         run::<Self>(model_param)
     }
@@ -70,7 +69,7 @@ pub trait Widget
 
 /// Trait implemented by the generator to ease the creation of tests of relm widgets using the
 /// view! macro.
-pub trait WidgetTest : Widget {
+pub trait WidgetTest: Widget {
     /// Represents the structure holding all the widgets. Useful for tests.
     type Widgets;
 
