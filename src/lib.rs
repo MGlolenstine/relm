@@ -104,7 +104,7 @@ pub mod vendor;
 mod widget;
 
 #[doc(hidden)]
-pub use glib::translate::{FromGlibPtrNone, ToGlib, ToGlibPtr};
+pub use glib::translate::{FromGlibPtrNone, ToGlibPtr};
 use glib::Continue;
 #[doc(hidden)]
 pub use glib::{Cast, IsA, Object, StaticType, ToValue, Value};
