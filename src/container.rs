@@ -20,7 +20,7 @@
  */
 
 use glib::{Cast, IsA, Object};
-use gtk4::{prelude::WidgetExt, ContainerExt};
+use gtk4::prelude::WidgetExt;
 
 use super::{create_widget, init_component, Component, DisplayVariant};
 use crate::state::EventStream;
@@ -208,4 +208,11 @@ impl<W: Clone + ContainerExt + IsA<gtk4::Widget> + IsA<Object>> ContainerWidget 
     {
         self.remove(component.widget());
     }
+}
+
+pub trait ContainerExt {
+    fn remove<WIDGET>(&self, widget: WIDGET)
+    where
+        WIDGET: Widget,
+        WIDGET::Root: IsA<gtk4::Widget>;
 }
