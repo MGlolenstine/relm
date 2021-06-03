@@ -261,7 +261,7 @@ fn test_drop_same_thread() {
         }
     }
     let val = SemiSticky::new(X(was_called.clone()));
-    mem::drop(val);
+    drop(val);
     assert_eq!(was_called.load(Ordering::SeqCst), true);
 }
 

@@ -26,7 +26,6 @@ use std::ptr;
 use glib::translate::{from_glib_none, ToGlibPtr};
 use glib::Source;
 use glib_sys::{g_source_new, GSource, GSourceFunc, GSourceFuncs};
-use libc;
 
 pub trait SourceFuncs {
     fn check(&self) -> bool {

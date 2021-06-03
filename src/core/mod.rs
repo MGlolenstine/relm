@@ -29,7 +29,7 @@
     trivial_numeric_casts,
     unused_extern_crates,
     unused_import_braces,
-    unused_qualifications,
+    unused_qualifications
 )]
 
 mod source;
@@ -40,7 +40,7 @@ use std::marker::PhantomData;
 use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, SendError};
 
-use self::source::{SourceFuncs, new_source, source_get};
+use self::source::{new_source, source_get, SourceFuncs};
 
 use glib::{MainContext, Source};
 
@@ -103,21 +103,24 @@ impl<MSG> Channel<MSG> {
         }));
         let main_context = MainContext::default();
         source.attach(Some(&main_context));
-        (Self {
-            _source: source,
-            _phantom: PhantomData,
-        }, Sender {
-            sender,
-        })
+        (
+            Self {
+                _source: source,
+                _phantom: PhantomData,
+            },
+            Sender { sender },
+        )
     }
 }
 
 impl<MSG> SourceFuncs for RefCell<ChannelData<MSG>> {
     fn dispatch(&self) -> bool {
         // TODO: show errors.
-        let msg = self.borrow_mut().peeked_value.take().or_else(|| {
-            self.borrow().receiver.try_recv().ok()
-        });
+        let msg = self
+            .borrow_mut()
+            .peeked_value
+            .take()
+            .or_else(|| self.borrow().receiver.try_recv().ok());
         if let Some(msg) = msg {
             let callback = &mut self.borrow_mut().callback;
             callback(msg);
@@ -133,7 +136,6 @@ impl<MSG> SourceFuncs for RefCell<ChannelData<MSG>> {
         self.borrow_mut().peeked_value = peek_val;
         (self.borrow().peeked_value.is_some(), None)
     }
-
 }
 
 struct _EventStream<MSG> {
@@ -154,7 +156,6 @@ impl<MSG> SourceFuncs for SourceData<MSG> {
     fn prepare(&self) -> (bool, Option<u32>) {
         (!self.stream.borrow().events.is_empty(), None)
     }
-
 }
 
 struct SourceData<MSG> {
@@ -185,6 +186,12 @@ impl<MSG> EventStream<MSG> {
 
     fn get_stream(&self) -> Rc<RefCell<_EventStream<MSG>>> {
         source_get::<SourceData<MSG>>(&self.source).stream.clone()
+    }
+}
+
+impl<MSG> Default for EventStream<MSG> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

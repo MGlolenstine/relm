@@ -1,1 +1,1 @@
-pub mod fragile;
+pub mod fragile_mod;

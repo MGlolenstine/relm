@@ -19,7 +19,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-use glib::{Cast, IsA, Object};
+use glib::{IsA, Object};
 use gtk4::prelude::WidgetExt;
 
 use super::{create_widget, init_component, Component, DisplayVariant};
@@ -60,24 +60,26 @@ impl<WIDGET: Container + Widget> ContainerComponent<WIDGET> {
     }
 
     /// Add a GTK+ widget to a relm container.
-    pub fn add<CHILDWIDGET: IsA<gtk4::Widget>>(&self, widget: &CHILDWIDGET) {
-        self.container.add(widget);
+    pub fn add<CHILDWIDGET: IsA<gtk4::Widget>>(&self, _widget: &CHILDWIDGET) {
+        unimplemented!("Add #1");
+        // self.container.add(widget);
     }
 
     /// Add a relm widget to a relm container.
     pub fn add_widget<CHILDWIDGET>(
         &self,
-        model_param: CHILDWIDGET::ModelParam,
+        _model_param: CHILDWIDGET::ModelParam,
     ) -> Component<CHILDWIDGET>
     where
         CHILDWIDGET: Widget + 'static,
         WIDGET::Container: ContainerExt + IsA<gtk4::Widget> + IsA<Object>,
     {
-        let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
-        let container = WIDGET::add_widget(self, &component);
-        widget.on_add(container);
-        init_component::<CHILDWIDGET>(component.stream(), widget, &child_relm);
-        component
+        // let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
+        // let container = WIDGET::add_widget(self, &component);
+        // widget.on_add(container);
+        // init_component::<CHILDWIDGET>(component.stream(), widget, &child_relm);
+        // component
+        unimplemented!("Add #2");
     }
 
     /// Emit a message of the widget stream.
@@ -102,20 +104,21 @@ impl<WIDGET: Container + Widget> ContainerComponent<WIDGET> {
 /// Trait to implement relm container widget.
 pub trait Container: Widget {
     /// The type of the containing widget, i.e. where the child widgets will be added.
-    type Container: Clone + IsA<gtk4::Container> + IsA<Object> + IsA<gtk4::Widget>;
+    type Container: Clone + IsA<Object> + IsA<gtk4::Widget>;
     /// Type to contain the additional container widgets.
     // TODO: put that in yet another trait?
     type Containers: Clone;
 
     /// Add a relm widget to this container.
     /// Return the widget that will be send to Widget::on_add().
-    fn add_widget<WIDGET: Widget>(
-        container: &ContainerComponent<Self>,
-        component: &Component<WIDGET>,
-    ) -> gtk4::Container {
-        container.container.add(component.widget());
-        container.container.clone().upcast()
-    }
+    //TODO: Cast it into some kind of a container, probably creating a Container trait for grouping them together.
+    // fn add_widget<WIDGET: Widget>(
+    //     container: &ContainerComponent<Self>,
+    //     component: &Component<WIDGET>,
+    // ) -> Self::Container {
+    //     container.container.add(component.widget().clone());
+    //     container.container.clone().upcast()
+    // }
 
     /// Get the containing widget, i.e. the widget where the children will be added.
     fn container(&self) -> &Self::Container;
@@ -178,7 +181,7 @@ impl<W: Clone + ContainerExt + IsA<gtk4::Widget> + IsA<Object>> ContainerWidget 
         let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
         let container = widget.container().clone();
         let containers = widget.other_containers();
-        let root = widget.root().clone();
+        let root = widget.root();
         self.add(&root);
         widget.on_add(self.clone());
         init_component::<CHILDWIDGET>(component.stream(), widget, &child_relm);
@@ -211,8 +214,10 @@ impl<W: Clone + ContainerExt + IsA<gtk4::Widget> + IsA<Object>> ContainerWidget 
 }
 
 pub trait ContainerExt {
-    fn remove<WIDGET>(&self, widget: WIDGET)
+    fn remove<ROOT>(&self, widget: &ROOT)
     where
-        WIDGET: Widget,
-        WIDGET::Root: IsA<gtk4::Widget>;
+        ROOT: Clone + IsA<Object> + IsA<gtk4::Widget>;
+    fn add<ROOT>(&self, widget: &ROOT)
+    where
+        ROOT: Clone + IsA<Object> + IsA<gtk4::Widget>;
 }

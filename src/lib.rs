@@ -103,6 +103,9 @@ mod state;
 pub mod vendor;
 mod widget;
 
+use gtk::prelude::*;
+use std::time::Duration;
+
 #[doc(hidden)]
 pub use glib::translate::{FromGlibPtrNone, ToGlibPtr};
 use glib::Continue;
@@ -110,6 +113,7 @@ use glib::Continue;
 pub use glib::{Cast, IsA, Object, StaticType, ToValue, Value};
 #[doc(hidden)]
 pub use gobject_sys::{g_object_newv, GParameter};
+use gtk::Application;
 
 pub use crate::core::{Channel, EventStream, Sender};
 pub use crate::state::{execute, DisplayVariant, IntoOption, IntoPair, Relm, Update, UpdateNew};
@@ -332,18 +336,18 @@ where
 {
     gtk::init().map_err(|_| ())?;
     let _component = init::<WIDGET>(model_param)?;
-    gtk::main();
+    Application::builder().build().run();
     Ok(())
 }
 
 /// Emit the `msg` every `duration` ms.
 pub fn interval<F: Fn() -> MSG + 'static, MSG: 'static>(
     stream: &EventStream<MSG>,
-    duration: u32,
+    duration: u64,
     constructor: F,
 ) {
     let stream = stream.clone();
-    glib::timeout_add(duration, move || {
+    glib::timeout_add_local(Duration::from_millis(duration), move || {
         let msg = constructor();
         stream.emit(msg);
         Continue(true)
@@ -353,11 +357,11 @@ pub fn interval<F: Fn() -> MSG + 'static, MSG: 'static>(
 /// After `duration` ms, emit `msg`.
 pub fn timeout<F: Fn() -> MSG + 'static, MSG: 'static>(
     stream: &EventStream<MSG>,
-    duration: u32,
+    duration: u64,
     constructor: F,
 ) {
     let stream = stream.clone();
-    glib::timeout_add(duration, move || {
+    glib::timeout_add_local(Duration::from_millis(duration), move || {
         let msg = constructor();
         stream.emit(msg);
         Continue(false)
