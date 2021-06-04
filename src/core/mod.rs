@@ -29,7 +29,7 @@
     trivial_numeric_casts,
     unused_extern_crates,
     unused_import_braces,
-    unused_qualifications,
+    unused_qualifications
 )]
 
 mod source;
@@ -40,13 +40,9 @@ use std::marker::PhantomData;
 use std::rc::{Rc, Weak};
 use std::sync::mpsc::{self, Receiver, SendError};
 
-use self::source::{SourceFuncs, new_source, source_get};
+use self::source::{new_source, source_get, SourceFuncs};
 
-use glib::{
-    MainContext,
-    Source,
-    SourceId,
-};
+use glib::{MainContext, Source, SourceId};
 
 /// Handle to a EventStream to emit messages.
 pub struct StreamHandle<MSG> {
@@ -63,9 +59,7 @@ impl<MSG> Clone for StreamHandle<MSG> {
 
 impl<MSG> StreamHandle<MSG> {
     fn new(stream: Weak<RefCell<_EventStream<MSG>>>) -> Self {
-        Self {
-            stream,
-        }
+        Self { stream }
     }
 
     /// Same as clone(). Useful for the macro relm_observer_new.
@@ -77,8 +71,7 @@ impl<MSG> StreamHandle<MSG> {
     pub fn emit(&self, msg: MSG) {
         if let Some(ref stream) = self.stream.upgrade() {
             emit(stream, msg);
-        }
-        else {
+        } else {
             panic!("Trying to call emit() on a dropped EventStream");
         }
     }
@@ -90,8 +83,7 @@ impl<MSG> StreamHandle<MSG> {
             Lock {
                 stream: self.clone(),
             }
-        }
-        else {
+        } else {
             panic!("Trying to call lock() on a dropped EventStream");
         }
     }
@@ -99,8 +91,7 @@ impl<MSG> StreamHandle<MSG> {
     fn unlock(&self) {
         if let Some(ref stream) = self.stream.upgrade() {
             stream.borrow_mut().locked = false;
-        }
-        else {
+        } else {
             panic!("Trying to call unlock() on a dropped EventStream");
         }
     }
@@ -110,8 +101,7 @@ impl<MSG> StreamHandle<MSG> {
     pub fn observe<CALLBACK: Fn(&MSG) + 'static>(&self, callback: CALLBACK) {
         if let Some(ref stream) = self.stream.upgrade() {
             stream.borrow_mut().observers.push(Rc::new(callback));
-        }
-        else {
+        } else {
             panic!("Trying to call observe() on a dropped EventStream");
         }
     }
@@ -176,21 +166,24 @@ impl<MSG> Channel<MSG> {
         }));
         let main_context = MainContext::default();
         source.attach(Some(&main_context));
-        (Self {
-            _source: source,
-            _phantom: PhantomData,
-        }, Sender {
-            sender,
-        })
+        (
+            Self {
+                _source: source,
+                _phantom: PhantomData,
+            },
+            Sender { sender },
+        )
     }
 }
 
 impl<MSG> SourceFuncs for RefCell<ChannelData<MSG>> {
     fn dispatch(&self) -> bool {
         // TODO: show errors.
-        let msg = self.borrow_mut().peeked_value.take().or_else(|| {
-            self.borrow().receiver.try_recv().ok()
-        });
+        let msg = self
+            .borrow_mut()
+            .peeked_value
+            .take()
+            .or_else(|| self.borrow().receiver.try_recv().ok());
         if let Some(msg) = msg {
             let callback = &mut self.borrow_mut().callback;
             callback(msg);
@@ -206,7 +199,6 @@ impl<MSG> SourceFuncs for RefCell<ChannelData<MSG>> {
         self.borrow_mut().peeked_value = peek_val;
         (self.borrow().peeked_value.is_some(), None)
     }
-
 }
 
 struct _EventStream<MSG> {
@@ -230,7 +222,6 @@ impl<MSG> SourceFuncs for SourceData<MSG> {
     fn prepare(&self) -> (bool, Option<u32>) {
         (!self.stream.borrow().events.is_empty(), None)
     }
-
 }
 
 type Callback<MSG> = Rc<RefCell<Option<Box<dyn FnMut(MSG)>>>>;
