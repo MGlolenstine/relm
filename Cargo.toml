@@ -20,3 +20,4 @@ gobject-sys = "^0.10.0"
 gtk4 = {git = "https://github.com/gtk-rs/gtk4-rs"}
 libc = "^0.2.54"
 log = "^0.4.6"
+relm-derive = {path="relm-derive"}

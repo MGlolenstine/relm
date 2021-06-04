@@ -59,12 +59,12 @@ where
     fn root(&self) -> Self::Root;
 
     /// Create the window from this widget and start the main loop.
-    fn run(model_param: Self::ModelParam) -> Result<(), glib::BoolError>
+    fn run(app: gtk4::Application, model_param: Self::ModelParam) -> Result<(), glib::BoolError>
     where
         Self: 'static,
         <Self as crate::state::Update>::ModelParam: Clone,
     {
-        run::<Self>(model_param)
+        run::<Self>(app, model_param)
     }
 
     /// Create the initial view.

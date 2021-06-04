@@ -94,6 +94,7 @@
  * TODO: optionnaly multi-threaded.
  */
 
+mod app;
 mod component;
 mod container;
 mod core;
@@ -117,11 +118,12 @@ pub use crate::core::{Channel, EventStream, Sender, StreamHandle};
 pub use crate::state::{execute, DisplayVariant, IntoOption, IntoPair, Relm, Update, UpdateNew};
 use state::init_component;
 
+pub use app::App;
 pub use component::Component;
 pub use container::GtkContainer;
 pub use container::{Container, ContainerComponent, ContainerWidget};
 // pub use drawing::DrawHandler;
-use gtk4::{gio::ApplicationFlags, prelude::*};
+use gtk4::prelude::*;
 pub use widget::{Widget, WidgetTest};
 
 /// Dummy macro to be used with `#[derive(Widget)]`.
@@ -336,16 +338,18 @@ where
 /// Win::run(()).expect("Win::run failed");
 /// # }
 /// ```
-pub fn run<WIDGET>(model_param: WIDGET::ModelParam) -> Result<(), glib::BoolError>
+pub fn run<WIDGET>(
+    app: gtk4::Application,
+    model_param: WIDGET::ModelParam,
+) -> Result<(), glib::BoolError>
 where
     WIDGET: Widget + 'static,
     WIDGET::ModelParam: Clone,
 {
-    let application: gtk4::Application = gtk4::Application::new(None, ApplicationFlags::empty());
-    application.connect_activate(move |_a| {
+    app.connect_activate(move |_a| {
         let _component = init::<WIDGET>(model_param.clone()).unwrap();
     });
-    application.run();
+    app.run();
     Ok(())
 }
 
