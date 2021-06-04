@@ -23,27 +23,14 @@ use std::collections::{HashMap, HashSet};
 
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
-use syn::{
-    Expr,
-    Generics,
-    Ident,
-    Path,
-    Type,
-    TypePath,
-    parse,
-};
 use syn::fold::Fold;
 use syn::spanned::Spanned;
+use syn::{parse, Expr, Generics, Ident, Path, Type, TypePath};
 
-use super::parser::{
-    Event,
-    GtkWidget,
-    RelmWidget,
-    Widget,
-};
+use super::parser::EitherWidget::{Gtk, Relm};
 use super::parser::EventValue::{CurrentWidget, ForeignWidget, NoEventValue};
 use super::parser::EventValueReturn::{CallReturn, Return, WithoutReturn};
-use super::parser::EitherWidget::{Gtk, Relm};
+use super::parser::{Event, GtkWidget, RelmWidget, Widget};
 use super::transformer::Transformer;
 use super::{Driver, MODEL_IDENT};
 
@@ -84,17 +71,27 @@ pub fn gen(name: &Ident, widgets: &[Widget], driver: &mut Driver) -> Gen {
     let driver = generator.driver.take().expect("driver");
     let idents: Vec<_> = driver.widgets.keys().collect();
     let root_widget_name = &driver.root_widget.as_ref().expect("root_widget is None");
-    let component_names: Vec<_> = generator.widget_names.iter()
+    let component_names: Vec<_> = generator
+        .widget_names
+        .iter()
         .filter(|ident| generator.relm_components.contains_key(ident))
         .collect();
 
-    let component_widgets: Vec<_> = generator.widget_names.iter()
+    let component_widgets: Vec<_> = generator
+        .widget_names
+        .iter()
         .filter(|ident| generator.relm_components.contains_key(ident) && ident != root_widget_name)
         .collect();
     let component_widgets2 = &component_widgets;
 
-    let widget_names: Vec<_> = generator.widget_names.iter()
-        .filter(|ident| (idents.contains(ident) || generator.relm_widgets.contains_key(ident)) && !component_widgets.contains(ident) && ident != root_widget_name)
+    let widget_names: Vec<_> = generator
+        .widget_names
+        .iter()
+        .filter(|ident| {
+            (idents.contains(ident) || generator.relm_widgets.contains_key(ident))
+                && !component_widgets.contains(ident)
+                && ident != root_widget_name
+        })
         .collect();
 
     let events = &generator.events;
@@ -104,21 +101,23 @@ pub fn gen(name: &Ident, widgets: &[Widget], driver: &mut Driver) -> Gen {
     let widgets_name = Ident::new(&format!("__{}Widgets", name), Span::call_site());
     let streams_name = Ident::new(&format!("__{}Streams", name), Span::call_site());
 
-    let stream_names = generator.relm_components.keys()
+    let stream_names = generator
+        .relm_components
+        .keys()
         .filter(|ident| generator.streams_to_save.contains(ident));
-    let component_streams = generator.relm_components.keys()
+    let component_streams = generator
+        .relm_components
+        .keys()
         .filter(|ident| generator.streams_to_save.contains(ident))
         .map(|name| quote! { #name.stream() });
 
-    let root_widget_expr =
-        if driver.root_widget_is_relm {
-            quote! {
-                : #root_widget_name.widget().clone()
-            }
+    let root_widget_expr = if driver.root_widget_is_relm {
+        quote! {
+            : #root_widget_name.widget().clone()
         }
-        else {
-            quote! {}
-        };
+    } else {
+        quote! {}
+    };
 
     let view = quote_spanned! { name.span() =>
         #widget_tokens
@@ -141,7 +140,11 @@ pub fn gen(name: &Ident, widgets: &[Widget], driver: &mut Driver) -> Gen {
             model: #model_ident,
         }
     };
-    let container_impl = gen_container_impl(&generator, &widgets[0], driver.generic_types.as_ref().expect("generic types"));
+    let container_impl = gen_container_impl(
+        &generator,
+        &widgets[0],
+        driver.generic_types.as_ref().expect("generic types"),
+    );
 
     Gen {
         view,
@@ -177,23 +180,24 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn add_child_or_show_all(&mut self, widget: &Widget, parent: Option<&Ident>, parent_widget_type: WidgetType)
-        -> TokenStream
-    {
+    fn add_child_or_show_all(
+        &mut self,
+        widget: &Widget,
+        parent: Option<&Ident>,
+        parent_widget_type: WidgetType,
+    ) -> TokenStream {
         let widget_name = &widget.name;
         if let Some(name) = parent {
             if parent_widget_type == IsGtk {
                 quote_spanned! { widget_name.span() =>
-                    ::gtk::ContainerExt::add(&#name, &#widget_name);
+                    ::relm::GtkContainer::add(&#name, &#widget_name);
                 }
-            }
-            else {
+            } else {
                 quote! {
                     #name.add(&#widget_name);
                 }
             }
-        }
-        else {
+        } else {
             let struct_name = &widget.typ;
             let driver = self.driver.as_mut().expect("driver");
             if driver.root_widget_expr.is_none() {
@@ -205,39 +209,40 @@ impl<'a> Generator<'a> {
                     #widget_name
                 });
             }
-            quote! {
-            }
+            quote! {}
         }
     }
 
-    fn add_or_create_widget(&mut self, parent: Option<&Ident>, parent_widget_type: WidgetType, widget_name: &Ident,
-        widget_type_ident: &Path, init_parameters: &[Expr], is_container: bool) -> TokenStream
-    {
+    fn add_or_create_widget(
+        &mut self,
+        parent: Option<&Ident>,
+        parent_widget_type: WidgetType,
+        widget_name: &Ident,
+        widget_type_ident: &Path,
+        init_parameters: &[Expr],
+        is_container: bool,
+    ) -> TokenStream {
         let init_parameters = gen_model_param(init_parameters, WithParens);
         if let Some(parent) = parent {
             if parent_widget_type == IsGtk {
-                let add_method =
-                    if is_container {
-                        quote! { add_container }
-                    }
-                    else {
-                        quote! { add_widget }
-                    };
+                let add_method = if is_container {
+                    quote! { add_container }
+                } else {
+                    quote! { add_widget }
+                };
                 quote_spanned! { widget_name.span() =>
                     let #widget_name = {
                         ::relm::ContainerWidget::#add_method::<#widget_type_ident>(&#parent, #init_parameters)
                     };
                 }
-            }
-            else {
+            } else {
                 quote_spanned! { widget_name.span() =>
                     let #widget_name = {
                         #parent.add_widget::<#widget_type_ident>(#init_parameters)
                     };
                 }
             }
-        }
-        else {
+        } else {
             let driver = self.driver.as_mut().expect("driver");
             if driver.root_widget_expr.is_none() {
                 driver.root_widget_type = Some(quote_spanned! { widget_name.span() =>
@@ -253,8 +258,7 @@ impl<'a> Generator<'a> {
                 quote_spanned! { widget_name.span() =>
                     let #widget_name = ::relm::create_container::<#widget_type_ident>(#init_parameters);
                 }
-            }
-            else {
+            } else {
                 quote_spanned! { widget_name.span() =>
                     let #widget_name = ::relm::create_component::<#widget_type_ident>(#init_parameters);
                 }
@@ -267,32 +271,33 @@ impl<'a> Generator<'a> {
         let event_params = &event.params;
         let shared_values = gen_shared_values(&event.shared_values);
         let metadata = gen_event_metadata(event);
-        let connect =
-            match event.value {
-                CurrentWidget(WithoutReturn(ref event_value)) => quote_spanned! { widget_name.span() => {
+        let connect = match event.value {
+            CurrentWidget(WithoutReturn(ref event_value)) => {
+                quote_spanned! { widget_name.span() => {
                     #shared_values
                     relm::connect!(relm, #widget_name, #event_ident(#(#event_params),*), #metadata #event_value);
-                }},
-                ForeignWidget(ref foreign_widget_name, WithoutReturn(ref event_value)) => quote! {{
-                    #shared_values
-                    relm::connect!(#widget_name, #event_ident(#(#event_params),*), #foreign_widget_name, #event_value);
-                }},
-                CurrentWidget(Return(ref value)) => {
-                    let event_value = &value.0;
-                    let return_value = &value.1;
+                }}
+            }
+            ForeignWidget(ref foreign_widget_name, WithoutReturn(ref event_value)) => quote! {{
+                #shared_values
+                relm::connect!(#widget_name, #event_ident(#(#event_params),*), #foreign_widget_name, #event_value);
+            }},
+            CurrentWidget(Return(ref value)) => {
+                let event_value = &value.0;
+                let return_value = &value.1;
 
-                    quote_spanned! { widget_name.span() => {
-                        #shared_values
-                        relm::connect!(relm, #widget_name, #event_ident(#(#event_params),*), return (#event_value, #return_value));
-                    }}
-                },
-                ForeignWidget(_, Return(_)) | ForeignWidget(_, CallReturn(_)) => unreachable!(),
-                CurrentWidget(CallReturn(ref func)) => quote_spanned! { widget_name.span() => {
+                quote_spanned! { widget_name.span() => {
                     #shared_values
-                    relm::connect!(relm, #widget_name, #event_ident(#(#event_params),*), #metadata #func);
-                }},
-                NoEventValue => panic!("no event value"),
-            };
+                    relm::connect!(relm, #widget_name, #event_ident(#(#event_params),*), return (#event_value, #return_value));
+                }}
+            }
+            ForeignWidget(_, Return(_)) | ForeignWidget(_, CallReturn(_)) => unreachable!(),
+            CurrentWidget(CallReturn(ref func)) => quote_spanned! { widget_name.span() => {
+                #shared_values
+                relm::connect!(relm, #widget_name, #event_ident(#(#event_params),*), #metadata #func);
+            }},
+            NoEventValue => panic!("no event value"),
+        };
         self.events.push(connect);
     }
 
@@ -311,30 +316,33 @@ impl<'a> Generator<'a> {
         let widget_name = &widget.name;
         for (event_ident, widget_events) in &relm_widget.events {
             for event in widget_events {
-                let params =
-                    if event.params.is_empty() {
-                        quote! {}
+                let params = if event.params.is_empty() {
+                    quote! {}
+                } else {
+                    let event_params = &event.params;
+                    quote! {
+                        (#(#event_params),*)
                     }
-                    else {
-                        let event_params = &event.params;
-                        quote! {
-                            (#(#event_params),*)
-                        }
-                    };
+                };
                 let metadata = gen_event_metadata(event);
-                let connect =
-                    match event.value {
-                        CurrentWidget(WithoutReturn(ref event_value)) => quote_spanned! { widget_name.span() => {
+                let connect = match event.value {
+                    CurrentWidget(WithoutReturn(ref event_value)) => {
+                        quote_spanned! { widget_name.span() => {
                             relm::connect!(#widget_name@#event_ident #params, relm, #metadata #event_value);
-                        }},
-                        ForeignWidget(ref foreign_widget_name, WithoutReturn(ref event_value)) => quote! {{
+                        }}
+                    }
+                    ForeignWidget(ref foreign_widget_name, WithoutReturn(ref event_value)) => {
+                        quote! {{
                             relm::connect!(#widget_name@#event_ident #params, #foreign_widget_name,
                                      #metadata #event_value);
-                        }},
-                        CurrentWidget(Return(_)) | CurrentWidget(CallReturn(_)) | ForeignWidget(_, Return(_)) |
-                            ForeignWidget(_, CallReturn(_)) => unreachable!(),
-                        NoEventValue => panic!("no event value"),
-                    };
+                        }}
+                    }
+                    CurrentWidget(Return(_))
+                    | CurrentWidget(CallReturn(_))
+                    | ForeignWidget(_, Return(_))
+                    | ForeignWidget(_, CallReturn(_)) => unreachable!(),
+                    NoEventValue => panic!("no event value"),
+                };
                 self.events.push(connect);
             }
         }
@@ -343,11 +351,19 @@ impl<'a> Generator<'a> {
         }
         for (&(ref child_name, ref name), event) in &widget.child_events {
             let child_ident = Ident::new(&format!("get_{}", child_name), child_name.span());
-            self.collect_event(quote! { #widget_name.widget().#child_ident() }, &name, event);
+            self.collect_event(
+                quote! { #widget_name.widget().#child_ident() },
+                &name,
+                event,
+            );
         }
     }
 
-    fn gtk_set_prop_calls(&mut self, widget: &Widget, ident: TokenStream) -> (Vec<TokenStream>, Vec<TokenStream>) {
+    fn gtk_set_prop_calls(
+        &mut self,
+        widget: &Widget,
+        ident: TokenStream,
+    ) -> (Vec<TokenStream>, Vec<TokenStream>) {
         let mut properties = vec![];
         let mut visible_properties = vec![];
         for (key, value) in &widget.properties {
@@ -359,20 +375,18 @@ impl<'a> Generator<'a> {
             };
             if key == "visible" {
                 visible_properties.push(property);
-            }
-            else {
+            } else {
                 properties.push(property);
             }
         }
         for (key, value) in &widget.nested_views {
             let name = &value.name;
-            let name =
-                match value.widget {
-                    Gtk(_) => quote! { #name },
-                    Relm(_) => quote! {
-                        #name.widget().clone()
-                    },
-                };
+            let name = match value.widget {
+                Gtk(_) => quote! { #name },
+                Relm(_) => quote! {
+                    #name.widget().clone()
+                },
+            };
             let widget = self.widget(value, None, IsGtk, true);
             let property_func = Ident::new(&format!("set_{}", key), key.span());
             let property = quote! {
@@ -384,23 +398,31 @@ impl<'a> Generator<'a> {
         (properties, visible_properties)
     }
 
-    fn gtk_widget(&mut self, widget: &Widget, gtk_widget: &GtkWidget, parent: Option<&Ident>,
-        parent_widget_type: WidgetType, show: bool) -> TokenStream
-    {
+    fn gtk_widget(
+        &mut self,
+        widget: &Widget,
+        gtk_widget: &GtkWidget,
+        parent: Option<&Ident>,
+        parent_widget_type: WidgetType,
+        show: bool,
+    ) -> TokenStream {
         let struct_name = &widget.typ;
         let widget_name = &widget.name;
         self.set_container(widget, widget_name, struct_name, false);
         self.widget_names.push(widget_name.clone());
 
         if widget.save {
-            self.relm_widgets.insert(widget_name.clone(), struct_name.clone());
+            self.relm_widgets
+                .insert(widget_name.clone(), struct_name.clone());
             self.streams_to_save.insert(widget_name.clone());
         }
 
         let construct_widget = gen_construct_widget(widget, gtk_widget);
         self.collect_events(widget, gtk_widget);
 
-        let children: Vec<_> = widget.children.iter()
+        let children: Vec<_> = widget
+            .children
+            .iter()
             .map(|child| self.widget(child, Some(widget_name), IsGtk, true))
             .collect();
 
@@ -412,15 +434,13 @@ impl<'a> Generator<'a> {
             quote_spanned! { widget_name.span() => gtk::StyleContextExt::add_class(&#widget_name.get_style_context(), &#style_class); }
         ).collect();
 
-        let show =
-            if show {
-                quote_spanned! { widget_name.span() =>
-                    ::gtk::WidgetExt::show(&#widget_name);
-                }
+        let show = if show {
+            quote_spanned! { widget_name.span() =>
+                ::gtk::WidgetExt::show(&#widget_name);
             }
-            else {
-                quote! { }
-            };
+        } else {
+            quote! {}
+        };
 
         quote_spanned! { widget_name.span() =>
             let #widget_name: #struct_name = #construct_widget;
@@ -434,15 +454,20 @@ impl<'a> Generator<'a> {
         }
     }
 
-    fn relm_widget(&mut self, widget: &Widget, relm_widget: &RelmWidget, parent: Option<&Ident>,
-        parent_widget_type: WidgetType) -> TokenStream
-    {
+    fn relm_widget(
+        &mut self,
+        widget: &Widget,
+        relm_widget: &RelmWidget,
+        parent: Option<&Ident>,
+        parent_widget_type: WidgetType,
+    ) -> TokenStream {
         self.widget_names.push(widget.name.clone());
         let widget_name = &widget.name;
         let widget_type_ident = &widget.typ;
         self.set_container(widget, widget_name, widget_type_ident, true);
         let relm_component_type = gen_relm_component_type(widget.is_container, widget_type_ident);
-        self.relm_components.insert(widget.name.clone(), relm_component_type);
+        self.relm_components
+            .insert(widget.name.clone(), relm_component_type);
 
         if widget.save {
             self.streams_to_save.insert(widget_name.clone());
@@ -450,7 +475,9 @@ impl<'a> Generator<'a> {
 
         self.collect_relm_events(widget, relm_widget);
 
-        let children: Vec<_> = widget.children.iter()
+        let children: Vec<_> = widget
+            .children
+            .iter()
             .map(|child| self.widget(child, Some(widget_name), IsRelm, true))
             .collect();
         let ident = quote! { #widget_name.widget() };
@@ -459,7 +486,13 @@ impl<'a> Generator<'a> {
         self.properties.append(&mut visible_properties);
 
         let add_or_create_widget = self.add_or_create_widget(
-            parent, parent_widget_type, widget_name, widget_type_ident, &widget.init_parameters, widget.is_container);
+            parent,
+            parent_widget_type,
+            widget_name,
+            widget_type_ident,
+            &widget.init_parameters,
+            widget.is_container,
+        );
         let child_properties = gen_set_child_prop_calls(widget, parent, parent_widget_type, IsRelm);
         let messages = self.messages(widget, relm_widget);
 
@@ -486,32 +519,53 @@ impl<'a> Generator<'a> {
         tokens
     }
 
-    fn set_container(&mut self, widget: &Widget, widget_name: &Ident, widget_type: &Path, is_relm_widget: bool) {
+    fn set_container(
+        &mut self,
+        widget: &Widget,
+        widget_name: &Ident,
+        widget_type: &Path,
+        is_relm_widget: bool,
+    ) {
         if let Some(ref container_type) = widget.container_type {
             if self.container_names.contains_key(container_type) {
-                let attribute =
-                    if let Some(ref typ) = *container_type {
-                        format!("#[container=\"{}\"]", typ)
-                    }
-                    else {
-                        "#[container]".to_string()
-                    };
-                panic!("Cannot use the {} attribute twice in the same widget", attribute);
+                let attribute = if let Some(ref typ) = *container_type {
+                    format!("#[container=\"{}\"]", typ)
+                } else {
+                    "#[container]".to_string()
+                };
+                panic!(
+                    "Cannot use the {} attribute twice in the same widget",
+                    attribute
+                );
             }
             if is_relm_widget {
-                self.relm_components.insert(widget_name.clone(), widget_type.clone());
+                self.relm_components
+                    .insert(widget_name.clone(), widget_type.clone());
+            } else {
+                self.relm_widgets
+                    .insert(widget_name.clone(), widget_type.clone());
             }
-            else {
-                self.relm_widgets.insert(widget_name.clone(), widget_type.clone());
-            }
-            self.container_names.insert(container_type.clone(), (widget_name.clone(), widget_type.clone()));
+            self.container_names.insert(
+                container_type.clone(),
+                (widget_name.clone(), widget_type.clone()),
+            );
         }
     }
 
-    fn widget(&mut self, widget: &Widget, parent: Option<&Ident>, parent_widget_type: WidgetType, show: bool) -> TokenStream {
+    fn widget(
+        &mut self,
+        widget: &Widget,
+        parent: Option<&Ident>,
+        parent_widget_type: WidgetType,
+        show: bool,
+    ) -> TokenStream {
         match widget.widget {
-            Gtk(ref gtk_widget) => self.gtk_widget(widget, gtk_widget, parent, parent_widget_type, show),
-            Relm(ref relm_widget) => self.relm_widget(widget, relm_widget, parent, parent_widget_type),
+            Gtk(ref gtk_widget) => {
+                self.gtk_widget(widget, gtk_widget, parent, parent_widget_type, show)
+            }
+            Relm(ref relm_widget) => {
+                self.relm_widget(widget, relm_widget, parent, parent_widget_type)
+            }
         }
     }
 }
@@ -580,8 +634,7 @@ fn gen_construct_widget(widget: &Widget, gtk_widget: &GtkWidget) -> TokenStream 
                 .downcast_unchecked()*/
             }
         }
-    }
-    else {
+    } else {
         let params = gen_model_param(&widget.init_parameters, WithoutParens);
         quote! {
             #struct_name::new(#params)
@@ -594,31 +647,27 @@ fn gen_event_metadata(event: &Event) -> TokenStream {
         quote! {
             return
         }
-    }
-    else {
+    } else {
         quote! {}
     }
 }
 
 fn gen_shared_values(shared_values: &[Ident]) -> TokenStream {
     let model_ident = Ident::new(MODEL_IDENT, Span::call_site());
-    let fields = shared_values.iter()
-        .map(|ident| {
-             let typ =
-                 if ident == "relm" {
-                     quote_spanned! { ident.span() =>
-                         Relm<_>
-                     }
-                 }
-                 else {
-                     quote_spanned! { ident.span() =>
-                         ::std::rc::Rc<_>
-                     }
-                 };
-             quote! {
-                 let #ident: #typ = #model_ident.#ident.clone();
-             }
-        });
+    let fields = shared_values.iter().map(|ident| {
+        let typ = if ident == "relm" {
+            quote_spanned! { ident.span() =>
+                Relm<_>
+            }
+        } else {
+            quote_spanned! { ident.span() =>
+                ::std::rc::Rc<_>
+            }
+        };
+        quote! {
+            let #ident: #typ = #model_ident.#ident.clone();
+        }
+    });
     quote! {
         #(#fields)*
     }
@@ -627,22 +676,31 @@ fn gen_shared_values(shared_values: &[Ident]) -> TokenStream {
 fn gen_widget_ident(widget: &Widget) -> (TokenStream, Span) {
     match widget.widget {
         Gtk(ref gtk_widget) => {
-            if let Some(Type::Path(TypePath { path: Path { ref segments, .. }, .. })) = gtk_widget.relm_name {
+            if let Some(Type::Path(TypePath {
+                path: Path { ref segments, .. },
+                ..
+            })) = gtk_widget.relm_name
+            {
                 let ident = &segments[0].ident;
-                (quote! {
-                    #ident
-                }, ident.span())
-            }
-            else {
+                (
+                    quote! {
+                        #ident
+                    },
+                    ident.span(),
+                )
+            } else {
                 panic!("relm name should be a Path");
             }
-        },
+        }
         Relm(_) => {
             let path = &widget.typ;
-            (quote! {
-                #path
-            }, path.span())
-        },
+            (
+                quote! {
+                    #path
+                },
+                path.span(),
+            )
+        }
     }
 }
 
@@ -653,41 +711,44 @@ fn gen_widget_type(widget: &Widget) -> TokenStream {
             quote! {
                 #ident
             }
-        },
+        }
         Relm(_) => {
             let path = &widget.typ;
             quote! {
                 #path
             }
-        },
+        }
     }
 }
 
 fn gen_add_widget_method(container_names: &HashMap<Option<String>, (Ident, Path)>) -> TokenStream {
     if container_names.len() > 1 {
-        let span = container_names.values().next().expect("at least one container name").0.span();
+        let span = container_names
+            .values()
+            .next()
+            .expect("at least one container name")
+            .0
+            .span();
         let mut default_container = quote! {};
         let mut other_containers = quote! {};
         for (parent_id, &(ref name, _)) in container_names {
             if parent_id.is_none() {
                 default_container = quote_spanned! { span =>
-                    ::gtk::ContainerExt::add(&container.container, widget.widget());
+                    ::relm::GtkContainer::add(&container.container, widget.widget());
                     ::relm::Cast::upcast(container.container.clone())
                 };
-            }
-            else if other_containers.is_empty() {
+            } else if other_containers.is_empty() {
                 other_containers = quote_spanned! { span =>
                     if WIDGET::parent_id() == Some(#parent_id) {
-                        ::gtk::ContainerExt::add(&container.containers.#name, widget.widget());
+                        ::relm::GtkContainer::add(&container.containers.#name, widget.widget());
                         ::relm::Cast::upcast(container.containers.#name.clone())
                     }
                 };
-            }
-            else {
+            } else {
                 other_containers = quote_spanned! { span =>
                     #other_containers
                     else if WIDGET::parent_id() == Some(#parent_id) {
-                        ::gtk::ContainerExt::add(&container.containers.#name, widget.widget());
+                        ::relm::GtkContainer::add(&container.containers.#name, widget.widget());
                         ::relm::Cast::upcast(container.containers.#name.clone())
                     }
                 };
@@ -708,24 +769,23 @@ fn gen_add_widget_method(container_names: &HashMap<Option<String>, (Ident, Path)
                 #default_container
             }
         }
-    }
-    else {
-        quote! {
-        }
+    } else {
+        quote! {}
     }
 }
 
-fn gen_container_impl(generator: &Generator, widget: &Widget, generic_types: &Generics) -> TokenStream {
+fn gen_container_impl(
+    generator: &Generator,
+    widget: &Widget,
+    generic_types: &Generics,
+) -> TokenStream {
     let where_clause = gen_where_clause(generic_types);
     let widget_type = gen_widget_type(widget);
     if generator.container_names.is_empty() {
-        quote! {
-        }
-    }
-    else if !generator.container_names.contains_key(&None) {
+        quote! {}
+    } else if !generator.container_names.contains_key(&None) {
         panic!("Use of #[container=\"name\"] attribute without the default #[container].");
-    }
-    else {
+    } else {
         let mut container_type = None;
         for (ident, &(_, ref typ)) in &generator.container_names {
             if ident.is_none() {
@@ -733,12 +793,15 @@ fn gen_container_impl(generator: &Generator, widget: &Widget, generic_types: &Ge
             }
         }
         let typ = container_type.expect("container type");
-        let &(ref name, _) = generator.container_names.get(&None).expect("default container");
+        let &(ref name, _) = generator
+            .container_names
+            .get(&None)
+            .expect("default container");
         let add_widget_method = gen_add_widget_method(&generator.container_names);
 
         let (widget_ident, widget_ident_span) = gen_widget_ident(widget);
-        let (containers, containers_type, other_containers_func) = gen_other_containers(&generator, &widget_ident,
-            widget_ident_span);
+        let (containers, containers_type, other_containers_func) =
+            gen_other_containers(&generator, &widget_ident, widget_ident_span);
 
         quote_spanned! { widget.name.span() =>
             #containers
@@ -759,9 +822,11 @@ fn gen_container_impl(generator: &Generator, widget: &Widget, generic_types: &Ge
     }
 }
 
-fn gen_other_containers(generator: &Generator, widget_type: &TokenStream, widget_ident_span: Span) ->
-    (TokenStream, TokenStream, TokenStream)
-{
+fn gen_other_containers(
+    generator: &Generator,
+    widget_type: &TokenStream,
+    widget_ident_span: Span,
+) -> (TokenStream, TokenStream, TokenStream) {
     if generator.container_names.len() > 1 {
         let containers_ident = Ident::new(&format!("{}Containers", widget_type), widget_ident_span);
         let mut names = vec![];
@@ -770,47 +835,51 @@ fn gen_other_containers(generator: &Generator, widget_type: &TokenStream, widget
         for &(ref name, ref typ) in generator.container_names.values() {
             names.push(name.clone());
             let original_type = typ.clone();
-            let typ =
-                if typ.segments.len() > 1 {
-                    // GTK+ widget
-                    values.push(name.clone());
-                    quote! { #original_type }
+            let typ = if typ.segments.len() > 1 {
+                // GTK+ widget
+                values.push(name.clone());
+                quote! { #original_type }
+            } else {
+                // Relm widget
+                values.push(Ident::new(&format!("{}", name), name.span()));
+                let original_ident = original_type.segments[0].ident.clone();
+                quote_spanned! { original_ident.span() =>
+                    <#original_ident as ::relm::Widget>::Root
                 }
-                else {
-                    // Relm widget
-                    values.push(Ident::new(&format!("{}", name), name.span()));
-                    let original_ident = original_type.segments[0].ident.clone();
-                    quote_spanned! { original_ident.span() =>
-                        <#original_ident as ::relm::Widget>::Root
-                    }
-                };
+            };
             types.push(typ);
         }
         let names = &names;
-        (quote! {
-            #[allow(dead_code)]
-            #[derive(Clone)]
-            pub struct #containers_ident {
-                #(#names: #types,)*
-            }
-        }, quote! {
-            #containers_ident
-        }, quote! {
-            fn other_containers(&self) -> Self::Containers {
-                #containers_ident {
-                    #(#names: self.widgets.#values.clone(),)*
+        (
+            quote! {
+                #[allow(dead_code)]
+                #[derive(Clone)]
+                pub struct #containers_ident {
+                    #(#names: #types,)*
                 }
-            }
-        })
-    }
-    else {
-        (quote! {
-        }, quote! {
-            ()
-        }, quote! {
-            fn other_containers(&self) -> Self::Containers {
-            }
-        })
+            },
+            quote! {
+                #containers_ident
+            },
+            quote! {
+                fn other_containers(&self) -> Self::Containers {
+                    #containers_ident {
+                        #(#names: self.widgets.#values.clone(),)*
+                    }
+                }
+            },
+        )
+    } else {
+        (
+            quote! {},
+            quote! {
+                ()
+            },
+            quote! {
+                fn other_containers(&self) -> Self::Containers {
+                }
+            },
+        )
     }
 }
 
@@ -825,8 +894,7 @@ fn gen_model_param(init_parameters: &[Expr], with_parens: WithParentheses) -> To
         quote! {
             (#(#params),*)
         }
-    }
-    else {
+    } else {
         quote! {
             #(#params),*
         }
@@ -834,50 +902,47 @@ fn gen_model_param(init_parameters: &[Expr], with_parens: WithParentheses) -> To
 }
 
 fn gen_relm_component_type(is_container: bool, name: &Path) -> Path {
-    let tokens =
-        if is_container {
-            quote_spanned! { name.span() =>
-                ::relm::ContainerComponent<#name>
-            }
+    let tokens = if is_container {
+        quote_spanned! { name.span() =>
+            ::relm::ContainerComponent<#name>
         }
-        else {
-            quote_spanned! { name.span() =>
-                ::relm::Component<#name>
-            }
-        };
+    } else {
+        quote_spanned! { name.span() =>
+            ::relm::Component<#name>
+        }
+    };
     parse(tokens.into()).expect("gen_relm_component_type is a Path")
 }
 
-fn gen_set_child_prop_calls(widget: &Widget, parent: Option<&Ident>, parent_widget_type: WidgetType,
-    widget_type: WidgetType) -> Vec<TokenStream>
-{
+fn gen_set_child_prop_calls(
+    widget: &Widget,
+    parent: Option<&Ident>,
+    parent_widget_type: WidgetType,
+    widget_type: WidgetType,
+) -> Vec<TokenStream> {
     let widget_name = &widget.name;
     let mut child_properties = vec![];
     if let Some(parent) = parent {
         for (&(ref ident, ref key), value) in &widget.child_properties {
             let property_func = Ident::new(&format!("set_{}_{}", ident, key), key.span());
-            let parent =
-                if parent_widget_type == IsGtk {
-                    quote! {
-                        #parent
-                    }
+            let parent = if parent_widget_type == IsGtk {
+                quote! {
+                    #parent
                 }
-                else {
-                    quote! {
-                        #parent.container
-                    }
-                };
-            let call =
-                if widget_type == IsGtk {
-                    quote! {
-                        #parent.#property_func(&#widget_name, #value);
-                    }
+            } else {
+                quote! {
+                    #parent.container
                 }
-                else {
-                    quote! {
-                        #parent.#property_func(#widget_name.widget(), #value);
-                    }
-                };
+            };
+            let call = if widget_type == IsGtk {
+                quote! {
+                    #parent.#property_func(&#widget_name, #value);
+                }
+            } else {
+                quote! {
+                    #parent.#property_func(#widget_name.widget(), #value);
+                }
+            };
             child_properties.push(call);
         }
     }

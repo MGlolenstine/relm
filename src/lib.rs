@@ -118,9 +118,10 @@ pub use crate::state::{execute, DisplayVariant, IntoOption, IntoPair, Relm, Upda
 use state::init_component;
 
 pub use component::Component;
-// pub use container::{Container, ContainerComponent, ContainerWidget};
+pub use container::GtkContainer;
+pub use container::{Container, ContainerComponent, ContainerWidget};
 // pub use drawing::DrawHandler;
-use gtk4::prelude::*;
+use gtk4::{gio::ApplicationFlags, prelude::*};
 pub use widget::{Widget, WidgetTest};
 
 /// Dummy macro to be used with `#[derive(Widget)]`.
@@ -167,19 +168,19 @@ where
 
 /// Create a new relm container widget without adding it to an existing widget.
 /// This is useful when a relm widget is at the root of another relm widget.
-// pub fn create_container<CHILDWIDGET>(
-//     model_param: CHILDWIDGET::ModelParam,
-// ) -> ContainerComponent<CHILDWIDGET>
-// where
-//     CHILDWIDGET: Container + Widget + 'static,
-//     CHILDWIDGET::Msg: DisplayVariant + 'static,
-// {
-//     let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
-//     let container = widget.container().clone();
-//     let containers = widget.other_containers();
-//     init_component::<CHILDWIDGET>(component.owned_stream(), widget, &child_relm);
-//     ContainerComponent::new(component, container, containers)
-// }
+pub fn create_container<CHILDWIDGET>(
+    model_param: CHILDWIDGET::ModelParam,
+) -> ContainerComponent<CHILDWIDGET>
+where
+    CHILDWIDGET: Container + Widget + 'static,
+    CHILDWIDGET::Msg: DisplayVariant + 'static,
+{
+    let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
+    let container = widget.container().clone();
+    let containers = widget.other_containers();
+    init_component::<CHILDWIDGET>(component.owned_stream(), widget, &child_relm);
+    ContainerComponent::new(component, container, containers)
+}
 
 /// Create a new relm widget with `model_param` as initialization value.
 fn create_widget<WIDGET>(
@@ -338,9 +339,12 @@ where
 pub fn run<WIDGET>(model_param: WIDGET::ModelParam) -> Result<(), glib::BoolError>
 where
     WIDGET: Widget + 'static,
+    WIDGET::ModelParam: Clone,
 {
-    let application: gtk4::Application = gtk4::ApplicationBuilder::new().build();
-    let _component = init::<WIDGET>(model_param)?;
+    let application: gtk4::Application = gtk4::Application::new(None, ApplicationFlags::empty());
+    application.connect_activate(move |_a| {
+        let _component = init::<WIDGET>(model_param.clone()).unwrap();
+    });
     application.run();
     Ok(())
 }

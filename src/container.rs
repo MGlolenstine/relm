@@ -61,7 +61,7 @@ impl<WIDGET: Container + Widget> ContainerComponent<WIDGET> {
     ) -> Component<CHILDWIDGET>
     where
         CHILDWIDGET: Widget<Root = gtk4::Widget> + 'static,
-        WIDGET::Container: ContainerExt + IsA<gtk4::Widget> + IsA<Object>,
+        WIDGET::Container: GtkContainer + IsA<gtk4::Widget> + IsA<Object>,
     {
         let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
         let container = WIDGET::add_widget(self, &component);
@@ -161,7 +161,7 @@ pub trait ContainerWidget {
         CHILDWIDGET::Root: IsA<gtk4::Widget>;
 }
 
-impl<W: Clone + ContainerExt + IsA<gtk4::Widget> + IsA<Object>> ContainerWidget for W {
+impl<W: Clone + GtkContainer + IsA<gtk4::Widget> + IsA<Object>> ContainerWidget for W {
     fn add_container<CHILDWIDGET>(
         &self,
         model_param: CHILDWIDGET::ModelParam,
@@ -208,28 +208,27 @@ impl<W: Clone + ContainerExt + IsA<gtk4::Widget> + IsA<Object>> ContainerWidget 
     }
 }
 
-pub trait GtkContainer
-where
-    Self::ROOT: Clone + IsA<Object> + IsA<gtk4::Widget>,
-{
-    type ROOT;
-    fn remove<ROOT>(&self, widget: &ROOT);
-    fn add<ROOT>(&self, widget: &ROOT);
-}
-pub trait ContainerExt
-where
-    Self::ROOT: Clone + IsA<Object> + IsA<gtk4::Widget>,
-{
-    type ROOT;
-    fn remove<ROOT>(&self, widget: &ROOT);
-    fn add<ROOT>(&self, widget: &ROOT);
+pub trait GtkContainer {
+    fn remove<ROOT: Clone + IsA<gtk4::Widget>>(&self, widget: &ROOT);
+    fn add<ROOT: Clone + IsA<gtk4::Widget>>(&self, widget: &ROOT);
 }
 
-// pub trait ContainerExt {
-//     fn remove<ROOT>(&self, widget: &ROOT)
-//     where
-//         ROOT: Clone + IsA<Object> + IsA<gtk4::Widget>;
-//     fn add<ROOT>(&self, widget: &ROOT)
-//     where
-//         ROOT: Clone + IsA<Object> + IsA<gtk4::Widget>;
-// }
+impl GtkContainer for gtk4::Box {
+    fn remove<ROOT: Clone + IsA<gtk4::Widget>>(&self, widget: &ROOT) {
+        gtk4::prelude::BoxExt::remove(self, widget);
+    }
+
+    fn add<ROOT: Clone + IsA<gtk4::Widget>>(&self, widget: &ROOT) {
+        gtk4::prelude::BoxExt::append(self, widget);
+    }
+}
+
+impl GtkContainer for gtk4::Window {
+    fn remove<ROOT: Clone + IsA<gtk4::Widget>>(&self, _: &ROOT) {
+        gtk4::prelude::GtkWindowExt::set_child(self, None::<&gtk4::Widget>);
+    }
+
+    fn add<ROOT: Clone + IsA<gtk4::Widget>>(&self, widget: &ROOT) {
+        gtk4::prelude::GtkWindowExt::set_child(self, Some(widget));
+    }
+}
