@@ -20,10 +20,10 @@
  */
 
 use glib::{Cast, IsA, Object};
-use gtk::{ContainerExt, WidgetExt};
+use gtk4::prelude::WidgetExt;
 
+use super::{create_widget, init_component, Component, DisplayVariant, StreamHandle};
 use crate::state::EventStream;
-use super::{Component, DisplayVariant, StreamHandle, create_widget, init_component};
 use crate::widget::Widget;
 
 /// Struct for relm containers to add GTK+ and relm `Widget`s.
@@ -37,7 +37,11 @@ pub struct ContainerComponent<WIDGET: Container + Widget> {
 
 impl<WIDGET: Container + Widget> ContainerComponent<WIDGET> {
     #[doc(hidden)]
-    pub fn new(component: Component<WIDGET>, container: WIDGET::Container, containers: WIDGET::Containers) -> Self {
+    pub fn new(
+        component: Component<WIDGET>,
+        container: WIDGET::Container,
+        containers: WIDGET::Containers,
+    ) -> Self {
         ContainerComponent {
             component,
             container,
@@ -46,15 +50,18 @@ impl<WIDGET: Container + Widget> ContainerComponent<WIDGET> {
     }
 
     /// Add a GTK+ widget to a relm container.
-    pub fn add<CHILDWIDGET: IsA<gtk::Widget>>(&self, widget: &CHILDWIDGET) {
+    pub fn add<CHILDWIDGET: IsA<gtk4::Widget>>(&self, widget: &CHILDWIDGET) {
         self.container.add(widget);
     }
 
     /// Add a relm widget to a relm container.
-    pub fn add_widget<CHILDWIDGET>(&self, model_param: CHILDWIDGET::ModelParam)
-        -> Component<CHILDWIDGET>
-        where CHILDWIDGET: Widget + 'static,
-              WIDGET::Container: ContainerExt + IsA<gtk::Widget> + IsA<Object>,
+    pub fn add_widget<CHILDWIDGET>(
+        &self,
+        model_param: CHILDWIDGET::ModelParam,
+    ) -> Component<CHILDWIDGET>
+    where
+        CHILDWIDGET: Widget<Root = gtk4::Widget> + 'static,
+        WIDGET::Container: ContainerExt + IsA<gtk4::Widget> + IsA<Object>,
     {
         let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
         let container = WIDGET::add_widget(self, &component);
@@ -91,16 +98,17 @@ impl<WIDGET: Container + Widget> ContainerComponent<WIDGET> {
 /// Trait to implement relm container widget.
 pub trait Container: Widget {
     /// The type of the containing widget, i.e. where the child widgets will be added.
-    type Container: Clone + IsA<gtk::Container> + IsA<Object> + IsA<gtk::Widget>;
+    type Container: Clone + GtkContainer + IsA<Object> + IsA<gtk4::Widget>;
     /// Type to contain the additional container widgets.
     // TODO: put that in yet another trait?
     type Containers: Clone;
 
     /// Add a relm widget to this container.
     /// Return the widget that will be send to Widget::on_add().
-    fn add_widget<WIDGET: Widget>(container: &ContainerComponent<Self>, component: &Component<WIDGET>)
-        -> gtk::Container
-    {
+    fn add_widget<WIDGET: Widget<Root = gtk4::Widget>>(
+        container: &ContainerComponent<Self>,
+        component: &Component<WIDGET>,
+    ) -> gtk4::Widget {
         container.container.add(component.widget());
         container.container.clone().upcast()
     }
@@ -122,11 +130,14 @@ pub trait ContainerWidget {
     /// The returned `ContainerComponent` must be stored in a `Widget`. If it is not stored, a
     /// communication receiver will be droped which will cause events to be ignored for this
     /// widget.
-    fn add_container<CHILDWIDGET>(&self, model_param: CHILDWIDGET::ModelParam)
-            -> ContainerComponent<CHILDWIDGET>
-        where CHILDWIDGET: Container + Widget + 'static,
-              CHILDWIDGET::Msg: DisplayVariant + 'static,
-              CHILDWIDGET::Root: IsA<gtk::Widget> + IsA<Object> + WidgetExt;
+    fn add_container<CHILDWIDGET>(
+        &self,
+        model_param: CHILDWIDGET::ModelParam,
+    ) -> ContainerComponent<CHILDWIDGET>
+    where
+        CHILDWIDGET: Container + Widget + 'static,
+        CHILDWIDGET::Msg: DisplayVariant + 'static,
+        CHILDWIDGET::Root: IsA<gtk4::Widget> + IsA<Object> + WidgetExt;
 
     /// Add a relm `Widget` to the current GTK+ container.
     ///
@@ -134,24 +145,31 @@ pub trait ContainerWidget {
     ///
     /// The returned `Component` must be stored in a `Widget`. If it is not stored, a communication
     /// receiver will be droped which will cause events to be ignored for this widget.
-    fn add_widget<CHILDWIDGET>(&self, model_param: CHILDWIDGET::ModelParam)
-            -> Component<CHILDWIDGET>
-        where CHILDWIDGET: Widget + 'static,
-              CHILDWIDGET::Msg: DisplayVariant + 'static,
-              CHILDWIDGET::Root: IsA<gtk::Widget> + IsA<Object> + WidgetExt;
+    fn add_widget<CHILDWIDGET>(
+        &self,
+        model_param: CHILDWIDGET::ModelParam,
+    ) -> Component<CHILDWIDGET>
+    where
+        CHILDWIDGET: Widget + 'static,
+        CHILDWIDGET::Msg: DisplayVariant + 'static,
+        CHILDWIDGET::Root: IsA<gtk4::Widget> + IsA<Object> + WidgetExt;
 
     /// Remove a relm `Widget` from the current GTK+ container.
     fn remove_widget<CHILDWIDGET>(&self, component: Component<CHILDWIDGET>)
-        where CHILDWIDGET: Widget,
-              CHILDWIDGET::Root: IsA<gtk::Widget>;
+    where
+        CHILDWIDGET: Widget,
+        CHILDWIDGET::Root: IsA<gtk4::Widget>;
 }
 
-impl<W: Clone + ContainerExt + IsA<gtk::Widget> + IsA<Object>> ContainerWidget for W {
-    fn add_container<CHILDWIDGET>(&self, model_param: CHILDWIDGET::ModelParam)
-            -> ContainerComponent<CHILDWIDGET>
-        where CHILDWIDGET: Container + Widget + 'static,
-              CHILDWIDGET::Msg: DisplayVariant + 'static,
-              CHILDWIDGET::Root: IsA<gtk::Widget> + IsA<Object> + WidgetExt,
+impl<W: Clone + ContainerExt + IsA<gtk4::Widget> + IsA<Object>> ContainerWidget for W {
+    fn add_container<CHILDWIDGET>(
+        &self,
+        model_param: CHILDWIDGET::ModelParam,
+    ) -> ContainerComponent<CHILDWIDGET>
+    where
+        CHILDWIDGET: Container + Widget + 'static,
+        CHILDWIDGET::Msg: DisplayVariant + 'static,
+        CHILDWIDGET::Root: IsA<gtk4::Widget> + IsA<Object> + WidgetExt,
     {
         let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
         let container = widget.container().clone();
@@ -163,11 +181,14 @@ impl<W: Clone + ContainerExt + IsA<gtk::Widget> + IsA<Object>> ContainerWidget f
         ContainerComponent::new(component, container, containers)
     }
 
-    fn add_widget<CHILDWIDGET>(&self, model_param: CHILDWIDGET::ModelParam)
-            -> Component<CHILDWIDGET>
-        where CHILDWIDGET: Widget + 'static,
-              CHILDWIDGET::Msg: DisplayVariant + 'static,
-              CHILDWIDGET::Root: IsA<gtk::Widget> + IsA<Object> + WidgetExt,
+    fn add_widget<CHILDWIDGET>(
+        &self,
+        model_param: CHILDWIDGET::ModelParam,
+    ) -> Component<CHILDWIDGET>
+    where
+        CHILDWIDGET: Widget + 'static,
+        CHILDWIDGET::Msg: DisplayVariant + 'static,
+        CHILDWIDGET::Root: IsA<gtk4::Widget> + IsA<Object> + WidgetExt,
     {
         let (component, widget, child_relm) = create_widget::<CHILDWIDGET>(model_param);
         self.add(component.widget());
@@ -179,9 +200,36 @@ impl<W: Clone + ContainerExt + IsA<gtk::Widget> + IsA<Object>> ContainerWidget f
     // TODO: we're probably not calling remove_widget() when removing a relm widget from a gtk
     // widget.
     fn remove_widget<WIDGET>(&self, component: Component<WIDGET>)
-        where WIDGET: Widget,
-              WIDGET::Root: IsA<gtk::Widget>,
+    where
+        WIDGET: Widget,
+        WIDGET::Root: IsA<gtk4::Widget>,
     {
         self.remove(component.widget());
     }
 }
+
+pub trait GtkContainer
+where
+    Self::ROOT: Clone + IsA<Object> + IsA<gtk4::Widget>,
+{
+    type ROOT;
+    fn remove<ROOT>(&self, widget: &ROOT);
+    fn add<ROOT>(&self, widget: &ROOT);
+}
+pub trait ContainerExt
+where
+    Self::ROOT: Clone + IsA<Object> + IsA<gtk4::Widget>,
+{
+    type ROOT;
+    fn remove<ROOT>(&self, widget: &ROOT);
+    fn add<ROOT>(&self, widget: &ROOT);
+}
+
+// pub trait ContainerExt {
+//     fn remove<ROOT>(&self, widget: &ROOT)
+//     where
+//         ROOT: Clone + IsA<Object> + IsA<gtk4::Widget>;
+//     fn add<ROOT>(&self, widget: &ROOT)
+//     where
+//         ROOT: Clone + IsA<Object> + IsA<gtk4::Widget>;
+// }

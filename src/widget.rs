@@ -27,7 +27,7 @@ use crate::state::Update;
 /// Trait to implement to manage widget's events.
 pub trait Widget
     where Self: Update,
-          Self::Root: Clone + IsA<Object> + IsA<gtk::Widget>,
+          Self::Root: Clone + IsA<Object> + IsA<gtk4::Widget>,
 {
     /// The type of the root widget.
     type Root;
@@ -42,7 +42,7 @@ pub trait Widget
     /// This is currently only used to set the child properties of a widget as relm widget could
     /// have child properties and we don't know its parent when it is defined. Thus, we call
     /// on_add() when it is added to its parent to set the child properties.
-    fn on_add<W: IsA<gtk::Widget> + IsA<Object>>(&self, _parent: W) {
+    fn on_add<W: IsA<gtk4::Widget> + IsA<Object>>(&self, _parent: W) {
     }
 
     /// Get the parent ID.
