@@ -94,7 +94,7 @@
  * TODO: optionnaly multi-threaded.
  */
 
-mod app;
+pub mod app;
 mod component;
 mod container;
 mod core;
